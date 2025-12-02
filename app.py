@@ -4,6 +4,7 @@ from docstrange import DocumentExtractor
 import tempfile
 import os
 from io import StringIO
+import re
 
 # Configure API key
 os.environ['DOCSTRANGE_API_KEY'] = "3fef6743-96a4-11f0-8f02-d289544ddb4c"
@@ -40,8 +41,6 @@ def get_language_for_location(location, location_mapping):
             return lang
     
     return "Hindi"  # Default fallback
-
-import re
 
 def extract_phone_number(text):
     """Extract 10-digit phone number from text"""
@@ -257,6 +256,10 @@ if uploaded_files:
                 st.warning(f"No extractable content found in {uploaded_file.name}")
                 continue
             
+            # Show debug info
+            st.write(f"**Raw CSV content (first 500 chars):**")
+            st.text(csv_content[:500] if csv_content else "No content")
+            
             # Parse CSV with error handling - capture ALL columns
             try:
                 # Try multiple parsing methods to capture all data
@@ -280,10 +283,6 @@ if uploaded_files:
                     st.error(f"Could not parse CSV from {uploaded_file.name}: {csv_error}")
                     continue
             
-            # Show debug info
-            st.write(f"**Raw CSV content (first 500 chars):**")
-            st.text(csv_content[:500] if csv_content else "No content")
-            
             # Format to target structure
             formatted_df = format_to_target_structure(df, selected_app_type, uploaded_file.name, location_mapping)
             
@@ -295,12 +294,7 @@ if uploaded_files:
             if not formatted_df.empty:
                 all_formatted_dfs.append(formatted_df)
             else:
-                st.warning(f"No valid data found in {uploaded_file.name} after validation")tracted data:**")
-            st.dataframe(df)
-            st.write(f"**Formatted data:**")
-            st.dataframe(formatted_df)
-            
-            all_formatted_dfs.append(formatted_df)
+                st.warning(f"No valid data found in {uploaded_file.name} after validation")
             
         except Exception as e:
             st.error(f"Error processing {uploaded_file.name}: {e}")
