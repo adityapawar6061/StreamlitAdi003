@@ -229,58 +229,34 @@ if uploaded_files:
             extractor = DocumentExtractor()
             result = extractor.extract(tmp_path)
             
-            # Try different extraction methods
+            # Try different extraction methods with better error handling
             csv_content = None
-            text_content = None
             
-            # First try CSV extraction
             try:
                 csv_content = result.extract_csv()
                 st.success(f"CSV extraction successful for {uploaded_file.name}")
             except Exception as e:
-                st.warning(f"CSV extraction failed for {uploaded_file.name}: {str(e)}")
-                
-                # Try text extraction as fallback
+                st.warning(f"CSV extraction failed: {str(e)}")
                 try:
                     text_content = result.extract_text()
                     if text_content and text_content.strip():
                         st.info(f"Text extraction successful for {uploaded_file.name}")
-                        # Convert text to CSV-like format
+                        # Convert text to CSV format
                         lines = text_content.strip().split('\n')
                         csv_lines = []
                         for line in lines:
                             if line.strip():
-                                # Split by multiple spaces and rejoin with commas
                                 parts = re.split(r'\s{2,}', line.strip())
                                 if len(parts) == 1:
                                     parts = line.strip().split()
                                 csv_lines.append(','.join(parts))
                         csv_content = '\n'.join(csv_lines)
                     else:
-                        st.error(f"Text extraction returned empty content for {uploaded_file.name}")
-                except Exception as text_error:
-                    st.error(f"Text extraction also failed for {uploaded_file.name}: {str(text_error)}")
-                    
-                    # Last resort: try OCR extraction if available
-                    try:
-                        ocr_content = result.extract_ocr()
-                        if ocr_content and ocr_content.strip():
-                            st.info(f"OCR extraction successful for {uploaded_file.name}")
-                            lines = ocr_content.strip().split('\n')
-                            csv_lines = []
-                            for line in lines:
-                                if line.strip():
-                                    parts = re.split(r'\s{2,}', line.strip())
-                                    if len(parts) == 1:
-                                        parts = line.strip().split()
-                                    csv_lines.append(','.join(parts))
-                            csv_content = '\n'.join(csv_lines)
-                        else:
-                            st.error(f"All extraction methods failed for {uploaded_file.name}")
-                            continue
-                    except Exception as ocr_error:
-                        st.error(f"All extraction methods failed for {uploaded_file.name}. OCR error: {str(ocr_error)}")
+                        st.error(f"No content extracted from {uploaded_file.name}")
                         continue
+                except Exception as text_error:
+                    st.error(f"All extraction methods failed: {str(text_error)}")
+                    continue
             
             if not csv_content or csv_content.strip() == "":
                 st.warning(f"No extractable content found in {uploaded_file.name}")
@@ -290,9 +266,8 @@ if uploaded_files:
             st.write(f"**Raw CSV content (first 500 chars):**")
             st.text(csv_content[:500] if csv_content else "No content")
             
-            # Parse CSV with error handling - capture ALL columns
+            # Parse CSV with error handling
             try:
-                # Try multiple parsing methods to capture all data
                 df = pd.read_csv(StringIO(csv_content), header=None, sep=None, engine='python')
                 if df.empty:
                     df = pd.read_csv(StringIO(csv_content), header=None)
@@ -300,12 +275,10 @@ if uploaded_files:
                 st.warning(f"No data found in {uploaded_file.name}")
                 continue
             except Exception as csv_error:
-                # Try reading as raw text and splitting
                 try:
                     lines = csv_content.strip().split('\n')
                     data = []
                     for line in lines:
-                        # Split by common delimiters
                         row = re.split(r'[,\t\|;]', line)
                         data.append(row)
                     df = pd.DataFrame(data)
