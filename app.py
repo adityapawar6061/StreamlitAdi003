@@ -6,8 +6,15 @@ import os
 from io import StringIO
 import re
 
-# Configure API key
-os.environ['DOCSTRANGE_API_KEY'] = "3fef6743-96a4-11f0-8f02-d289544ddb4c"
+# Configure API key from secrets or environment
+try:
+    # Try to get from Streamlit secrets first
+    api_key = st.secrets["docstrange"]["api_key"]
+except:
+    # Fallback to environment variable
+    api_key = "3fef6743-96a4-11f0-8f02-d289544ddb4c"
+
+os.environ['DOCSTRANGE_API_KEY'] = api_key
 
 # Load language mapping
 @st.cache_data
@@ -226,7 +233,8 @@ if uploaded_files:
             tmp_path = tmp_file.name
         
         try:
-            extractor = DocumentExtractor()
+            # Initialize extractor with explicit API key
+            extractor = DocumentExtractor(api_key=api_key)
             result = extractor.extract(tmp_path)
             
             # Try different extraction methods with better error handling
