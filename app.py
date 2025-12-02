@@ -229,7 +229,33 @@ if uploaded_files:
         try:
             extractor = DocumentExtractor()
             result = extractor.extract(tmp_path)
-            csv_content = result.extract_csv()
+            
+            # Try different extraction methods
+            csv_content = None
+            try:
+                csv_content = result.extract_csv()
+            except Exception as e:
+                st.warning(f"CSV extraction failed for {uploaded_file.name}: {str(e)}")
+                # Try text extraction as fallback
+                try:
+                    text_content = result.extract_text()
+                    if text_content:
+                        # Convert text to CSV-like format
+                        lines = text_content.strip().split('\n')
+                        csv_lines = []
+                        for line in lines:
+                            if line.strip():
+                                # Split by spaces and rejoin with commas
+                                parts = line.strip().split()
+                                csv_lines.append(','.join(parts))
+                        csv_content = '\n'.join(csv_lines)
+                except Exception as text_error:
+                    st.error(f"Both CSV and text extraction failed for {uploaded_file.name}: {str(text_error)}")
+                    continue
+            
+            if not csv_content or csv_content.strip() == "":
+                st.warning(f"No extractable content found in {uploaded_file.name}")
+                continue
             
             # Parse CSV with error handling - capture ALL columns
             try:
@@ -254,10 +280,22 @@ if uploaded_files:
                     st.error(f"Could not parse CSV from {uploaded_file.name}: {csv_error}")
                     continue
             
+            # Show debug info
+            st.write(f"**Raw CSV content (first 500 chars):**")
+            st.text(csv_content[:500] if csv_content else "No content")
+            
             # Format to target structure
             formatted_df = format_to_target_structure(df, selected_app_type, uploaded_file.name, location_mapping)
             
             st.write(f"**Original extracted data:**")
+            st.dataframe(df)
+            st.write(f"**Formatted data:**")
+            st.dataframe(formatted_df)
+            
+            if not formatted_df.empty:
+                all_formatted_dfs.append(formatted_df)
+            else:
+                st.warning(f"No valid data found in {uploaded_file.name} after validation")tracted data:**")
             st.dataframe(df)
             st.write(f"**Formatted data:**")
             st.dataframe(formatted_df)
