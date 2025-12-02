@@ -231,26 +231,56 @@ if uploaded_files:
             
             # Try different extraction methods
             csv_content = None
+            text_content = None
+            
+            # First try CSV extraction
             try:
                 csv_content = result.extract_csv()
+                st.success(f"CSV extraction successful for {uploaded_file.name}")
             except Exception as e:
                 st.warning(f"CSV extraction failed for {uploaded_file.name}: {str(e)}")
+                
                 # Try text extraction as fallback
                 try:
                     text_content = result.extract_text()
-                    if text_content:
+                    if text_content and text_content.strip():
+                        st.info(f"Text extraction successful for {uploaded_file.name}")
                         # Convert text to CSV-like format
                         lines = text_content.strip().split('\n')
                         csv_lines = []
                         for line in lines:
                             if line.strip():
-                                # Split by spaces and rejoin with commas
-                                parts = line.strip().split()
+                                # Split by multiple spaces and rejoin with commas
+                                parts = re.split(r'\s{2,}', line.strip())
+                                if len(parts) == 1:
+                                    parts = line.strip().split()
                                 csv_lines.append(','.join(parts))
                         csv_content = '\n'.join(csv_lines)
+                    else:
+                        st.error(f"Text extraction returned empty content for {uploaded_file.name}")
                 except Exception as text_error:
-                    st.error(f"Both CSV and text extraction failed for {uploaded_file.name}: {str(text_error)}")
-                    continue
+                    st.error(f"Text extraction also failed for {uploaded_file.name}: {str(text_error)}")
+                    
+                    # Last resort: try OCR extraction if available
+                    try:
+                        ocr_content = result.extract_ocr()
+                        if ocr_content and ocr_content.strip():
+                            st.info(f"OCR extraction successful for {uploaded_file.name}")
+                            lines = ocr_content.strip().split('\n')
+                            csv_lines = []
+                            for line in lines:
+                                if line.strip():
+                                    parts = re.split(r'\s{2,}', line.strip())
+                                    if len(parts) == 1:
+                                        parts = line.strip().split()
+                                    csv_lines.append(','.join(parts))
+                            csv_content = '\n'.join(csv_lines)
+                        else:
+                            st.error(f"All extraction methods failed for {uploaded_file.name}")
+                            continue
+                    except Exception as ocr_error:
+                        st.error(f"All extraction methods failed for {uploaded_file.name}. OCR error: {str(ocr_error)}")
+                        continue
             
             if not csv_content or csv_content.strip() == "":
                 st.warning(f"No extractable content found in {uploaded_file.name}")
