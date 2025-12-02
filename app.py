@@ -83,6 +83,22 @@ def extract_application_id(text):
     
     return "", text
 
+def clean_text(text):
+    """Remove numbers and clean text for names and locations"""
+    if not text:
+        return ""
+    # Remove standalone numbers but keep text with numbers (like MR, MS)
+    words = text.split()
+    cleaned_words = []
+    for word in words:
+        # Keep words that are not pure numbers and not phone/app ID patterns
+        if not (word.isdigit() and len(word) >= 4):
+            # Remove numbers from mixed text but keep letters
+            cleaned_word = re.sub(r'\d+', '', word).strip()
+            if cleaned_word and len(cleaned_word) > 1:
+                cleaned_words.append(cleaned_word)
+    return ' '.join(cleaned_words)
+
 def clean_and_separate_data(row_values):
     """Clean and separate combined data"""
     all_text = ' '.join([str(val) for val in row_values if val])
@@ -127,8 +143,12 @@ def clean_and_separate_data(row_values):
     # Remaining parts: first half as name, second half as location
     if parts:
         mid = len(parts) // 2
-        name = ' '.join(parts[:mid+1]) if parts else ""
-        location = ' '.join(parts[mid+1:]) if len(parts) > mid+1 else ""
+        name_raw = ' '.join(parts[:mid+1]) if parts else ""
+        location_raw = ' '.join(parts[mid+1:]) if len(parts) > mid+1 else ""
+        
+        # Clean names and locations
+        name = clean_text(name_raw)
+        location = clean_text(location_raw)
     
     return app_id, name, phone, location, card_type, income, data_type
 
@@ -327,7 +347,7 @@ if uploaded_files:
         st.download_button(
             label="Download Final CSV",
             data=final_combined_df.to_csv(index=False),
-            file_name=f"extracted_data_{selected_app_type.replace(' ', '_').lower()}.csv",
+            file_name="data1024.csv",
             mime="text/csv",
             key="download_final_csv"
         )
