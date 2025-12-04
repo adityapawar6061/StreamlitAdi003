@@ -119,32 +119,89 @@ def clean_and_separate_data(row_values):
     income = ""
     data_type = ""
     
-    # Look for common patterns
-    for i, part in enumerate(parts):
-        if 'FIRST' in part.upper() or 'VISA' in part.upper() or 'RUPAY' in part.upper():
-            card_type = ' '.join(parts[i:i+3]) if i+2 < len(parts) else part
-            parts = parts[:i] + parts[i+3:]
+    # First extract all numbers for income (4+ digits)
+    income_candidates = []
+    filtered_parts = []
+    for part in parts:
+        if part.isdigit() and len(part) >= 4:
+            income_candidates.append(part)
+        else:
+            filtered_parts.append(part)
+    
+    # Use the first income candidate
+    if income_candidates:
+        income = income_candidates[0]
+    
+    # Look for card type patterns (no numbers allowed)
+    card_parts = []
+    remaining_parts = []
+    
+    # Check for Ashva card (with fuzzy matching)
+    ashva_found = False
+    for i, part in enumerate(filtered_parts):
+        part_upper = part.upper()
+        # Fuzzy match for Ashva variations
+        if ('ASHVA' in part_upper or 'ASTVA' in part_upper or 
+            'ASHWA' in part_upper or 'ASCHVA' in part_upper or
+            (len(part) >= 4 and part_upper.startswith('ASH') and 'V' in part_upper)):
+            card_parts = [part]
+            remaining_parts = filtered_parts[:i] + filtered_parts[i+1:]
+            ashva_found = True
             break
     
-    # Look for income (numbers)
-    for i, part in enumerate(parts):
-        if part.isdigit() and len(part) >= 4:
-            income = part
-            parts.pop(i)
-            break
+    # If Ashva not found, look for other card patterns
+    if not ashva_found:
+        i = 0
+        while i < len(filtered_parts):
+            part = filtered_parts[i]
+            if 'FIRST' in part.upper() or 'VISA' in part.upper() or 'RUPAY' in part.upper():
+                # Take this part and next 2 parts for card type
+                card_parts = filtered_parts[i:i+3] if i+2 < len(filtered_parts) else [part]
+                remaining_parts = filtered_parts[:i] + filtered_parts[i+len(card_parts):]
+                break
+            i += 1
+    
+    if not card_parts:
+        remaining_parts = filtered_parts
+    
+    # Clean card type (remove any numbers that might have slipped in)
+    if card_parts:
+        clean_card_parts = []
+        for part in card_parts:
+            # Remove numbers from card type parts
+            clean_part = re.sub(r'\d+', '', part).strip()
+            if clean_part:
+                # Normalize Ashva variations
+                part_upper = clean_part.upper()
+                if ('ASHVA' in part_upper or 'ASTVA' in part_upper or 
+                    'ASHWA' in part_upper or 'ASCHVA' in part_upper or
+                    (len(clean_part) >= 4 and part_upper.startswith('ASH') and 'V' in part_upper)):
+                    clean_card_parts.append('Ashva')
+                else:
+                    clean_card_parts.append(clean_part)
+        card_type = ' '.join(clean_card_parts)
     
     # Look for data type
-    for i, part in enumerate(parts):
+    final_parts = []
+    for part in remaining_parts:
         if part.upper() in ['BUREAU', 'INCOME', 'CARD']:
             data_type = part
-            parts.pop(i)
-            break
+        else:
+            final_parts.append(part)
+    
+    # If no income found yet, look in the remaining parts
+    if not income:
+        for part in final_parts[:]:
+            if part.isdigit() and len(part) >= 4:
+                income = part
+                final_parts.remove(part)
+                break
     
     # Remaining parts: first half as name, second half as location
-    if parts:
-        mid = len(parts) // 2
-        name_raw = ' '.join(parts[:mid+1]) if parts else ""
-        location_raw = ' '.join(parts[mid+1:]) if len(parts) > mid+1 else ""
+    if final_parts:
+        mid = len(final_parts) // 2
+        name_raw = ' '.join(final_parts[:mid+1]) if final_parts else ""
+        location_raw = ' '.join(final_parts[mid+1:]) if len(final_parts) > mid+1 else ""
         
         # Clean names and locations
         name = clean_text(name_raw)
