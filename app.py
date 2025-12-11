@@ -270,6 +270,12 @@ location_mapping = load_language_mapping()
 # Initialize session state
 if 'app_type' not in st.session_state:
     st.session_state.app_type = "Fresh Incomplete Application"
+if 'processed_files' not in st.session_state:
+    st.session_state.processed_files = set()
+if 'all_data' not in st.session_state:
+    st.session_state.all_data = []
+if 'failed_files' not in st.session_state:
+    st.session_state.failed_files = []
 
 # Application type selection
 st.subheader("Select Application Type")
@@ -297,12 +303,27 @@ if selected_app_type == "Fresh Incomplete Application":
 else:
     st.info("📋 Validation: Only Phone Number (10 digits) required. Application ID optional.")
 
+# Clear data button
+if st.button("🗑️ Clear All Data", type="secondary"):
+    st.session_state.processed_files = set()
+    st.session_state.all_data = []
+    st.success("All data cleared!")
+    st.rerun()
+
 uploaded_files = st.file_uploader("Upload images", type=['png', 'jpg', 'jpeg', 'pdf'], accept_multiple_files=True)
 
 if uploaded_files:
-    all_formatted_dfs = []
+    new_files_processed = []
     
     for i, uploaded_file in enumerate(uploaded_files):
+        # Create unique file identifier
+        file_id = f"{uploaded_file.name}_{len(uploaded_file.getvalue())}"
+        
+        # Skip if already processed
+        if file_id in st.session_state.processed_files:
+            st.info(f"File {uploaded_file.name} already processed - skipping")
+            continue
+            
         st.subheader(f"File {i+1}: {uploaded_file.name}")
         
         with tempfile.NamedTemporaryFile(delete=False, suffix=f".{uploaded_file.name.split('.')[-1]}") as tmp_file:
@@ -312,17 +333,43 @@ if uploaded_files:
         try:
             # Initialize extractor with explicit API key
             extractor = DocumentExtractor(api_key=api_key)
-            result = extractor.extract(tmp_path)
+            
+            # Add progress indicator
+            progress_placeholder = st.empty()
+            progress_placeholder.info(f"🔄 Processing {uploaded_file.name}...")
+            
+            try:
+                result = extractor.extract(tmp_path)
+                progress_placeholder.success(f"✅ File loaded: {uploaded_file.name}")
+            except Exception as extract_error:
+                error_msg = str(extract_error).lower()
+                if any(keyword in error_msg for keyword in ['network', 'connection', 'timeout', 'unreachable', 'dns']):
+                    st.error(f"🌐 Network error for {uploaded_file.name}: Connection interrupted. Skipping to next file.")
+                    st.session_state.failed_files.append(f"{uploaded_file.name} - Network Error")
+                    progress_placeholder.empty()
+                    continue
+                else:
+                    st.error(f"❌ Failed to process {uploaded_file.name}: {extract_error}")
+                    progress_placeholder.empty()
+                    continue
             
             # Try different extraction methods with better error handling
             csv_content = None
             
             try:
+                progress_placeholder.info(f"📊 Extracting data from {uploaded_file.name}...")
                 csv_content = result.extract_csv()
                 st.success(f"CSV extraction successful for {uploaded_file.name}")
             except Exception as e:
+                error_msg = str(e).lower()
+                if any(keyword in error_msg for keyword in ['network', 'connection', 'timeout', 'unreachable']):
+                    st.error(f"🌐 Network broke during CSV extraction for {uploaded_file.name}. Moving to next file.")
+                    progress_placeholder.empty()
+                    continue
+                
                 st.warning(f"CSV extraction failed: {str(e)}")
                 try:
+                    progress_placeholder.info(f"📝 Trying text extraction for {uploaded_file.name}...")
                     text_content = result.extract_text()
                     if text_content and text_content.strip():
                         st.info(f"Text extraction successful for {uploaded_file.name}")
@@ -338,10 +385,19 @@ if uploaded_files:
                         csv_content = '\n'.join(csv_lines)
                     else:
                         st.error(f"No content extracted from {uploaded_file.name}")
+                        progress_placeholder.empty()
                         continue
                 except Exception as text_error:
+                    error_msg = str(text_error).lower()
+                    if any(keyword in error_msg for keyword in ['network', 'connection', 'timeout']):
+                        st.error(f"🌐 Network broke during text extraction for {uploaded_file.name}. Moving to next file.")
+                        progress_placeholder.empty()
+                        continue
                     st.error(f"All extraction methods failed: {str(text_error)}")
+                    progress_placeholder.empty()
                     continue
+            
+            progress_placeholder.empty()
             
             if not csv_content or csv_content.strip() == "":
                 st.warning(f"No extractable content found in {uploaded_file.name}")
@@ -380,7 +436,10 @@ if uploaded_files:
             st.dataframe(formatted_df)
             
             if not formatted_df.empty:
-                all_formatted_dfs.append(formatted_df)
+                # Add to session state
+                st.session_state.all_data.append(formatted_df)
+                st.session_state.processed_files.add(file_id)
+                new_files_processed.append(formatted_df)
             else:
                 st.warning(f"No valid data found in {uploaded_file.name} after validation")
             
@@ -390,14 +449,26 @@ if uploaded_files:
             if os.path.exists(tmp_path):
                 os.unlink(tmp_path)
     
-    if all_formatted_dfs:
-        # Combine all formatted dataframes
-        final_combined_df = pd.concat(all_formatted_dfs, ignore_index=True, sort=False)
+    # Show results if we have any data
+    if st.session_state.all_data:
+        # Combine all data from session state
+        final_combined_df = pd.concat(st.session_state.all_data, ignore_index=True, sort=False)
         
         st.subheader("Final Combined Data")
         st.write(f"**Application Type:** {selected_app_type}")
+        st.write(f"**Total files processed:** {len(st.session_state.processed_files)}")
         st.write(f"**Total rows:** {len(final_combined_df)}")
         st.write(f"**Total columns:** {len(final_combined_df.columns)}")
+        
+        if new_files_processed:
+            st.success(f"✅ {len(new_files_processed)} new files processed in this session")
+        
+        # Show failed files if any
+        if st.session_state.failed_files:
+            with st.expander(f"⚠️ Failed Files ({len(st.session_state.failed_files)})"):
+                for failed_file in st.session_state.failed_files:
+                    st.write(f"- {failed_file}")
+        
         st.dataframe(final_combined_df)
         
         # Download button
