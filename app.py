@@ -277,6 +277,11 @@ if 'all_data' not in st.session_state:
 if 'failed_files' not in st.session_state:
     st.session_state.failed_files = []
 
+# Auto-backup to browser storage
+if st.session_state.all_data:
+    backup_data = pd.concat(st.session_state.all_data, ignore_index=True, sort=False)
+    st.session_state['backup_csv'] = backup_data.to_csv(index=False)
+
 # Application type selection
 st.subheader("Select Application Type")
 app_type_options = [
@@ -303,12 +308,31 @@ if selected_app_type == "Fresh Incomplete Application":
 else:
     st.info("📋 Validation: Only Phone Number (10 digits) required. Application ID optional.")
 
-# Clear data button
-if st.button("🗑️ Clear All Data", type="secondary"):
-    st.session_state.processed_files = set()
-    st.session_state.all_data = []
-    st.success("All data cleared!")
-    st.rerun()
+# Data management buttons
+col1, col2 = st.columns(2)
+with col1:
+    if st.button("🗑️ Clear All Data", type="secondary"):
+        st.session_state.processed_files = set()
+        st.session_state.all_data = []
+        st.session_state.failed_files = []
+        if 'backup_csv' in st.session_state:
+            del st.session_state['backup_csv']
+        st.success("All data cleared!")
+        st.rerun()
+
+with col2:
+    if 'backup_csv' in st.session_state and st.session_state.backup_csv:
+        st.download_button(
+            label="💾 Download Backup",
+            data=st.session_state.backup_csv,
+            file_name="backup_data.csv",
+            mime="text/csv",
+            key="download_backup"
+        )
+
+# Show current progress
+if st.session_state.all_data:
+    st.info(f"📊 Current Progress: {len(st.session_state.processed_files)} files processed, {sum(len(df) for df in st.session_state.all_data)} total rows")
 
 uploaded_files = st.file_uploader("Upload images", type=['png', 'jpg', 'jpeg', 'pdf'], accept_multiple_files=True)
 
@@ -440,6 +464,22 @@ if uploaded_files:
                 st.session_state.all_data.append(formatted_df)
                 st.session_state.processed_files.add(file_id)
                 new_files_processed.append(formatted_df)
+                
+                # Show combined data after each file
+                current_combined_df = pd.concat(st.session_state.all_data, ignore_index=True, sort=False)
+                st.write(f"**Combined Data (Files 1-{len(st.session_state.all_data)}):**")
+                st.write(f"Total rows so far: {len(current_combined_df)}")
+                st.dataframe(current_combined_df)
+                
+                # Auto-save progress
+                st.download_button(
+                    label=f"💾 Download Progress ({len(st.session_state.all_data)} files)",
+                    data=current_combined_df.to_csv(index=False),
+                    file_name=f"progress_{len(st.session_state.all_data)}_files.csv",
+                    mime="text/csv",
+                    key=f"download_progress_{file_id}"
+                )
+                
             else:
                 st.warning(f"No valid data found in {uploaded_file.name} after validation")
             
