@@ -509,13 +509,62 @@ if uploaded_files:
                 for failed_file in st.session_state.failed_files:
                     st.write(f"- {failed_file}")
         
-        st.dataframe(final_combined_df)
-        
-        # Download button
-        st.download_button(
-            label="Download Final CSV",
-            data=final_combined_df.to_csv(index=False),
-            file_name="data1024.csv",
-            mime="text/csv",
-            key="download_final_csv"
-        )
+        # Split data for Fresh Incomplete Application
+        if selected_app_type == "Fresh Incomplete Application":
+            total_rows = len(final_combined_df)
+            mid_point = total_rows // 2
+            
+            # D gets extra row if odd number
+            df_p = final_combined_df.iloc[:mid_point].copy()
+            df_d = final_combined_df.iloc[mid_point:].copy()
+            
+            # Update Type of Data column
+            df_p['Type of Data'] = 'Fresh Incomplete Application P'
+            df_d['Type of Data'] = 'Fresh Incomplete Application D'
+            
+            st.write(f"**Split Data:**")
+            st.write(f"- Fresh Incomplete Application P: {len(df_p)} rows")
+            st.write(f"- Fresh Incomplete Application D: {len(df_d)} rows")
+            
+            col1, col2 = st.columns(2)
+            with col1:
+                st.write("**Fresh Incomplete Application P:**")
+                st.dataframe(df_p)
+                st.download_button(
+                    label="Download P Data",
+                    data=df_p.to_csv(index=False),
+                    file_name="fresh_incomplete_P.csv",
+                    mime="text/csv",
+                    key="download_p_data"
+                )
+            
+            with col2:
+                st.write("**Fresh Incomplete Application D:**")
+                st.dataframe(df_d)
+                st.download_button(
+                    label="Download D Data",
+                    data=df_d.to_csv(index=False),
+                    file_name="fresh_incomplete_D.csv",
+                    mime="text/csv",
+                    key="download_d_data"
+                )
+            
+            # Combined download
+            combined_split_df = pd.concat([df_p, df_d], ignore_index=True)
+            st.download_button(
+                label="Download Combined P+D Data",
+                data=combined_split_df.to_csv(index=False),
+                file_name="fresh_incomplete_combined.csv",
+                mime="text/csv",
+                key="download_combined_split"
+            )
+        else:
+            st.dataframe(final_combined_df)
+            # Download button for other types
+            st.download_button(
+                label="Download Final CSV",
+                data=final_combined_df.to_csv(index=False),
+                file_name="data1024.csv",
+                mime="text/csv",
+                key="download_final_csv"
+            )
