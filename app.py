@@ -12,7 +12,7 @@ try:
     api_key = st.secrets["docstrange"]["api_key"]
 except:
     # Fallback to environment variable
-    api_key = "3fef6743-96a4-11f0-8f02-d289544ddb4c"
+    api_key = "d533d584-9e13-11f0-9a95-ba0abca6392e"
 
 os.environ['DOCSTRANGE_API_KEY'] = api_key
 
